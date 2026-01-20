@@ -104,6 +104,7 @@ def main():
 
     # --- 2. Load Data Paths by scanning a directory ---
     image_paths = []
+    source_directories = []
     allowed_extensions = {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.webp', '.bmp'}
     logging.info(f"🔍 Scanning for images in '{IMAGE_DATA_ROOT}'...")
     try:
@@ -117,6 +118,7 @@ def main():
             for file in files:
                 if os.path.splitext(file)[1].lower() in allowed_extensions:
                     image_paths.append(os.path.join(root, file))
+                    source_directories.append(os.path.basename(root))
 
         logging.info(f"✅ Found {len(image_paths)} images.")
         if not image_paths:
@@ -132,10 +134,11 @@ def main():
     # --- 3. Feature Extraction ---
     data_features = []
     filenames = []
+    image_source_dirs = []
     logging.info(f"⚙️ Processing {len(image_paths)} images...")
     for i, image_path in enumerate(image_paths):
         fname = os.path.basename(image_path)
-        if (i + 1) % 50 == 0:
+        if (i + 1) % 200 == 0:
             logging.info(f"  Processed {i + 1}/{len(image_paths)}: {fname}")
 
         feats = extract_local_features(image_path, kernels, use_cuda)
@@ -143,6 +146,7 @@ def main():
         if feats is not None:
             data_features.append(feats)
             filenames.append(fname)
+            image_source_dirs.append(source_directories[i])
 
     if not data_features:
         logging.warning("No features were extracted. Cannot proceed with clustering.")
@@ -150,7 +154,7 @@ def main():
 
     # --- 4. Clustering & Visualization ---
     logging.info(f"✅ Feature extraction complete. Extracted features for {len(data_features)} images.")
-    logging.info("🔬 Starting dimensionality reduction and clustering...")
+    logging.info("🔬 Starting dimensionality reduction and visualization by source directory...")
 
     # Ensure the output directory exists before saving plots.
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -173,29 +177,58 @@ def main():
     tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42)
     X_embedded = tsne.fit_transform(X_pca)
 
-    # Clusters
-    clusters = list(range(3,34))
-    for cluster_count in clusters:
-        kmeans = KMeans(n_clusters=cluster_count, random_state=42)
+    # Create a DataFrame for visualization
+    df_viz = pd.DataFrame({
+        'x': X_embedded[:, 0],
+        'y': X_embedded[:, 1],
+        'Source Directory': image_source_dirs,
+        'Filename': filenames
+    })
+
+    # Plotting
+    plt.figure(figsize=(14, 10))
+    sns.scatterplot(data=df_viz, x='x', y='y', hue='Source Directory', palette='tab20', s=80, alpha=0.7)
+    plt.title('t-SNE Visualization of Image Features by Source Directory')
+    plt.xlabel('t-SNE Component 1')
+    plt.ylabel('t-SNE Component 2')
+    plt.legend(title='Source Directory', bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True)
+    plt.tight_layout() # Adjust plot to ensure everything fits
+
+    # Save the plot
+    output_filename = 'srm_features_by_directory.png'
+    output_filepath = os.path.join(OUTPUT_DIR, output_filename)
+    plt.savefig(output_filepath)
+    logging.info(f"✅ Visualization plot saved to '{output_filepath}'")
+    plt.close()
+
+    # --- 5. Algorithmic Clustering (KMeans) ---
+    logging.info("🔬 Now performing KMeans clustering for k=3 to 33...")
+    clusters_to_test = range(3, 34)
+
+    for cluster_count in clusters_to_test:
+        # Cluster using KMeans. n_init is set to avoid a future warning.
+        kmeans = KMeans(n_clusters=cluster_count, random_state=42, n_init=10)
         labels = kmeans.fit_predict(X_scaled)
 
-        # Plot
-        df_viz = pd.DataFrame({'x': X_embedded[:, 0], 'y': X_embedded[:, 1], 'Cluster': labels, 'Filename': filenames})
+        # Add the new cluster labels to our visualization DataFrame
+        df_viz['Cluster'] = labels
 
+        # Plot
         plt.figure(figsize=(12, 8))
-        sns.scatterplot(data=df_viz, x='x', y='y', hue='Cluster', palette='viridis', s=100, alpha=0.8)
+        sns.scatterplot(data=df_viz, x='x', y='y', hue='Cluster', palette='viridis', s=80, alpha=0.7)
         plt.title(f'SRM Noise Clusters (k={cluster_count})')
         plt.xlabel('t-SNE Component 1')
         plt.ylabel('t-SNE Component 2')
         plt.legend(title='Cluster')
         plt.grid(True)
 
-        # Save the plot instead of showing it, which is better for containers
+        # Save the plot
         output_filename = f'srm_clusters_k{cluster_count}.png'
         output_filepath = os.path.join(OUTPUT_DIR, output_filename)
         plt.savefig(output_filepath)
         logging.info(f"✅ Clustering plot saved to '{output_filepath}'")
-        plt.close() # Free up memory by closing the figure
+        plt.close()  # Free up memory by closing the figure
 
 if __name__ == "__main__":
     main()
