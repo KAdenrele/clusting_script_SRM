@@ -215,13 +215,15 @@ def main():
         df_viz['Cluster'] = labels
 
         # Plot
-        plt.figure(figsize=(12, 8))
-        sns.scatterplot(data=df_viz, x='x', y='y', hue='Cluster', palette='viridis', s=80, alpha=0.7)
-        plt.title(f'SRM Noise Clusters (k={cluster_count})')
+        # Plotting with colors by source directory and shapes by cluster
+        plt.figure(figsize=(14, 10))
+        sns.scatterplot(data=df_viz, x='x', y='y', hue='Source Directory', style='Cluster', palette='tab20', s=80, alpha=0.7)
+        plt.title(f'KMeans Clusters (k={cluster_count}) with Source Directory Colors')
         plt.xlabel('t-SNE Component 1')
         plt.ylabel('t-SNE Component 2')
-        plt.legend(title='Cluster')
+        plt.legend(title='Legend', bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.grid(True)
+        plt.tight_layout()
 
         # Save the plot
         output_filename = f'srm_clusters_k{cluster_count}.png'
