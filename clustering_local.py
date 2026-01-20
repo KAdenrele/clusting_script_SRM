@@ -115,11 +115,16 @@ def main():
 
         metadata_df.columns = [col.lower().replace(' ', '_') for col in metadata_df.columns]
 
-        if 'file_name' not in metadata_df.columns or 'model' not in metadata_df.columns:
-            logging.error("❌ Error: CSVs must contain 'file_name' and 'model' columns.")
+        # Check for required columns
+        if 'processed_filename' not in metadata_df.columns or 'source_model' not in metadata_df.columns:
+            logging.error("❌ Error: CSVs must contain 'processed_filename' and 'source_model' columns.")
             return
 
-        filename_to_model_map = pd.Series(metadata_df.model.values, index=metadata_df.file_name).to_dict()
+        # Fill missing model values with 'authentic'
+        metadata_df['source_model'] = metadata_df['source_model'].fillna('authentic')
+
+        # Create a mapping from filename to model
+        filename_to_model_map = pd.Series(metadata_df.source_model.values, index=metadata_df.processed_filename).to_dict()
         logging.info(f"✅ Successfully loaded metadata for {len(filename_to_model_map)} files.")
 
     except FileNotFoundError as e:
