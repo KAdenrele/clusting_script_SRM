@@ -7,6 +7,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     ca-certificates \
+    libgl1 \
+    libxcb1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=uv_bin /uv /uvx /bin/
