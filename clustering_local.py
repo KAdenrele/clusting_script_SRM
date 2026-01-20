@@ -23,6 +23,10 @@ IMAGE_DATA_ROOT = os.getenv('DATA_ROOT', '/data/images')
 
 OUTPUT_DIR = os.getenv('OUTPUT_DIR', 'output')
 
+# --- NEW: Paths to your metadata CSV files ---
+METADATA_CSV_PATH_1 = os.getenv('METADATA_CSV_1', 'COCO_metadata.csv')
+METADATA_CSV_PATH_2 = os.getenv('METADATA_CSV_2', 'SAFE_metadata.csv')
+
 
 def get_srm_kernels():
     kernels = []
@@ -102,9 +106,31 @@ def main():
 
     kernels = get_srm_kernels()
 
+    # --- NEW: Load Model Metadata from CSVs ---
+    try:
+        logging.info(f"📖 Reading metadata from {METADATA_CSV_PATH_1} and {METADATA_CSV_PATH_2}...")
+        df1 = pd.read_csv(METADATA_CSV_PATH_1)
+        df2 = pd.read_csv(METADATA_CSV_PATH_2)
+        metadata_df = pd.concat([df1, df2], ignore_index=True)
+
+        metadata_df.columns = [col.lower().replace(' ', '_') for col in metadata_df.columns]
+
+        if 'file_name' not in metadata_df.columns or 'model' not in metadata_df.columns:
+            logging.error("❌ Error: CSVs must contain 'file_name' and 'model' columns.")
+            return
+
+        filename_to_model_map = pd.Series(metadata_df.model.values, index=metadata_df.file_name).to_dict()
+        logging.info(f"✅ Successfully loaded metadata for {len(filename_to_model_map)} files.")
+
+    except FileNotFoundError as e:
+        logging.error(f"❌ Error reading metadata CSV file: {e}. Make sure paths are correct and mapped into the container if needed.")
+        return
+    except Exception as e:
+        logging.error(f"❌ An error occurred during metadata loading: {e}")
+        return
+
     # --- 2. Load Data Paths by scanning a directory ---
     image_paths = []
-    source_directories = []
     allowed_extensions = {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.webp', '.bmp'}
     logging.info(f"🔍 Scanning for images in '{IMAGE_DATA_ROOT}'...")
     try:
@@ -118,7 +144,6 @@ def main():
             for file in files:
                 if os.path.splitext(file)[1].lower() in allowed_extensions:
                     image_paths.append(os.path.join(root, file))
-                    source_directories.append(os.path.basename(root))
 
         logging.info(f"✅ Found {len(image_paths)} images.")
         if not image_paths:
@@ -134,19 +159,24 @@ def main():
     # --- 3. Feature Extraction ---
     data_features = []
     filenames = []
-    image_source_dirs = []
+    image_models = []
     logging.info(f"⚙️ Processing {len(image_paths)} images...")
     for i, image_path in enumerate(image_paths):
         fname = os.path.basename(image_path)
         if (i + 1) % 200 == 0:
             logging.info(f"  Processed {i + 1}/{len(image_paths)}: {fname}")
 
+        model_name = filename_to_model_map.get(fname)
+        if model_name is None:
+            logging.warning(f"⚠️ No model found for '{fname}' in metadata, skipping.")
+            continue
+
         feats = extract_local_features(image_path, kernels, use_cuda)
 
         if feats is not None:
             data_features.append(feats)
             filenames.append(fname)
-            image_source_dirs.append(source_directories[i])
+            image_models.append(model_name)
 
     if not data_features:
         logging.warning("No features were extracted. Cannot proceed with clustering.")
@@ -154,7 +184,7 @@ def main():
 
     # --- 4. Clustering & Visualization ---
     logging.info(f"✅ Feature extraction complete. Extracted features for {len(data_features)} images.")
-    logging.info("🔬 Starting dimensionality reduction and visualization by source directory...")
+    logging.info("🔬 Starting dimensionality reduction and visualization by model...")
 
     # Ensure the output directory exists before saving plots.
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -181,22 +211,22 @@ def main():
     df_viz = pd.DataFrame({
         'x': X_embedded[:, 0],
         'y': X_embedded[:, 1],
-        'Source Directory': image_source_dirs,
+        'Model': image_models,
         'Filename': filenames
     })
 
     # Plotting
     plt.figure(figsize=(14, 10))
-    sns.scatterplot(data=df_viz, x='x', y='y', hue='Source Directory', palette='tab20', s=80, alpha=0.7)
-    plt.title('t-SNE Visualization of Image Features by Source Directory')
+    sns.scatterplot(data=df_viz, x='x', y='y', hue='Model', palette='tab20', s=80, alpha=0.7)
+    plt.title('t-SNE Visualization of Image Features by Model')
     plt.xlabel('t-SNE Component 1')
     plt.ylabel('t-SNE Component 2')
-    plt.legend(title='Source Directory', bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.legend(title='Model', bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.grid(True)
     plt.tight_layout() # Adjust plot to ensure everything fits
 
     # Save the plot
-    output_filename = 'srm_features_by_directory.png'
+    output_filename = 'srm_features_by_model.png'
     output_filepath = os.path.join(OUTPUT_DIR, output_filename)
     plt.savefig(output_filepath)
     logging.info(f"✅ Visualization plot saved to '{output_filepath}'")
@@ -217,8 +247,8 @@ def main():
         # Plot
         # Plotting with colors by source directory and shapes by cluster
         plt.figure(figsize=(14, 10))
-        sns.scatterplot(data=df_viz, x='x', y='y', hue='Source Directory', style='Cluster', palette='tab20', s=80, alpha=0.7)
-        plt.title(f'KMeans Clusters (k={cluster_count}) with Source Directory Colors')
+        sns.scatterplot(data=df_viz, x='x', y='y', hue='Model', style='Cluster', palette='tab20', s=80, alpha=0.7)
+        plt.title(f'KMeans Clusters (k={cluster_count}) with Model Colors')
         plt.xlabel('t-SNE Component 1')
         plt.ylabel('t-SNE Component 2')
         plt.legend(title='Legend', bbox_to_anchor=(1.05, 1), loc='upper left')
