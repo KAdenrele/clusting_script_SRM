@@ -24,8 +24,8 @@ IMAGE_DATA_ROOT = '/data/images/'
 OUTPUT_DIR = 'output'
 
 # --- NEW: Paths to your metadata CSV files ---
-METADATA_CSV_PATH_1 = 'COCO_metadata.csv'
-METADATA_CSV_PATH_2 = 'SAFE_metadata.csv'
+METADATA_CSV_PATH_1 = '/data/images/COCO_metadata.csv'
+METADATA_CSV_PATH_2 = '/data/images/SAFE_metadata.csv'
 
 
 def get_srm_kernels():
