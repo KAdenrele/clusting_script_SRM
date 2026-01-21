@@ -19,13 +19,13 @@ logging.basicConfig(
 )
 
 
-IMAGE_DATA_ROOT = os.getenv('DATA_ROOT', '/data/images')
+IMAGE_DATA_ROOT = '/data/images/'
 
-OUTPUT_DIR = os.getenv('OUTPUT_DIR', 'output')
+OUTPUT_DIR = 'output'
 
 # --- NEW: Paths to your metadata CSV files ---
-METADATA_CSV_PATH_1 = os.getenv('METADATA_CSV_1', 'COCO_metadata.csv')
-METADATA_CSV_PATH_2 = os.getenv('METADATA_CSV_2', 'SAFE_metadata.csv')
+METADATA_CSV_PATH_1 = 'COCO_metadata.csv'
+METADATA_CSV_PATH_2 = 'SAFE_metadata.csv'
 
 
 def get_srm_kernels():
